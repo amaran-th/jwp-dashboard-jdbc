@@ -5,10 +5,13 @@ import aop.StubUserHistoryDao;
 import aop.domain.User;
 import aop.repository.UserDao;
 import aop.repository.UserHistoryDao;
+import aop.service.AppUserService;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.aop.framework.ProxyFactoryBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -41,7 +44,7 @@ class Stage1Test {
 
     @Test
     void testChangePassword() {
-        final UserService userService = null;
+        final AppUserService userService = getProxyBean(new AppUserService(userDao, userHistoryDao));
 
         final var newPassword = "qqqqq";
         final var createBy = "gugu";
@@ -52,9 +55,22 @@ class Stage1Test {
         assertThat(actual.getPassword()).isEqualTo(newPassword);
     }
 
+    @Nullable
+    private AppUserService getProxyBean(final AppUserService appUserService) {
+        ProxyFactoryBean proxyFactoryBean = new ProxyFactoryBean();
+        proxyFactoryBean.setTarget(appUserService);
+        proxyFactoryBean.setProxyTargetClass(true);
+
+        proxyFactoryBean.addAdvisor(
+                new TransactionAdvisor(new TransactionPointcut(), new TransactionAdvice(platformTransactionManager))
+        );
+        final AppUserService userService = (AppUserService) proxyFactoryBean.getObject();
+        return userService;
+    }
+
     @Test
     void testTransactionRollback() {
-        final UserService userService = null;
+        final AppUserService userService = getProxyBean(new AppUserService(userDao, stubUserHistoryDao));
 
         final var newPassword = "newPassword";
         final var createBy = "gugu";
